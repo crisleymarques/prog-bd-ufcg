@@ -14,11 +14,9 @@ DECLARE
     FROM USER_TABLES 
     WHERE table_name LIKE 'OEHR_%';
   sql_stmt VARCHAR2(200);
-  novo_nome USER_TABLES.table_name%TYPE;
 BEGIN 
   FOR t IN c_tables LOOP
-    novo_nome := SUBSTR(t.table_name, 6);
-    sql_stmt := 'ALTER TABLE :antigo RENAME TO :novo';
-    EXECUTE IMMEDIATE sql_stmt USING t.table_name, novo_nome;
+    sql_stmt := 'ALTER TABLE ' || t.table_name || ' RENAME TO ' || SUBSTR(t.table_name, LENGTH('OEHR_')+1);
+    EXECUTE IMMEDIATE sql_stmt;
   END LOOP;
 END;
