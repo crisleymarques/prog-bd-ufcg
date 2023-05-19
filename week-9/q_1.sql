@@ -11,42 +11,66 @@
 -- Crie apenas as estruturas que estão sendo solicitadas. Não use função local nem blocos aninhados.
 
 
-
+-- Está com um bug que não funciona quando o proprietário não tem registros de estacionamento
 CREATE OR REPLACE FUNCTION CALCULATARIFA(p_cpf PROPRIETARIO.cpf%TYPE) RETURN NUMBER IS
-    CURSOR veiculos_c(id_prop PROPRIETARIO.cpf%TYPE) IS 
-        SELECT id_veiculo FROM VEICULO WHERE id_proprietario = id_prop;
+    CURSOR veiculos_c IS 
+        SELECT id_veiculo FROM PROPRIETARIO p, VEICULO v WHERE p.cpf = p_cpf AND p.id_proprietario = v.id_proprietario;
 
     CURSOR registros_c(veiculo VEICULO.id_veiculo%TYPE) IS 
         SELECT permanencia FROM REGISTRO WHERE id_veiculo = veiculo;
 
-    v_id_proprietario PROPRIETARIO.id_proprietario%TYPE;
+    v_registro registros_c%ROWTYPE;
     v_taxa NUMBER;
+    tem_registo BOOLEAN;
+    e EXCEPTION;
+    PRAGMA EXCEPTION_INIT(e, -20001);
 BEGIN
     v_taxa := 0;
-    SELECT id_proprietario
-    INTO v_id_proprietario
-    FROM PROPRIETARIO
-    WHERE cpf = p_cpf;
+    tem_registo := false;
 
-    FOR v in veiculos_c(v_id_proprietario) LOOP
-        FOR r IN registros_c(v.id_veiculo) LOOP
-            IF r.permanencia > 30 THEN
-                v_taxa := v_taxa + (r.permanencia - 30) * 0.1;
+    FOR v in veiculos_c LOOP
+        OPEN registros_c(v.id_veiculo);
+        LOOP
+            FETCH registros_c into v_registro;
+            EXIT WHEN registros_c%NOTFOUND;
+            IF registros_c%FOUND THEN
+                tem_registo := true;
+            END IF;
+            IF v_registro.permanencia > 30 THEN
+                v_taxa := v_taxa + (v_registro.permanencia - 30) * 0.1;
             END IF;
         END LOOP;
+        CLOSE registros_c;
     END LOOP;
+
+    IF tem_registo = false THEN
+        raise_application_error(-20001, 'Não tem registro para esse proprietario.');
+    END IF;
+
     RETURN v_taxa;
+
+    EXCEPTION
+      WHEN e THEN
+        DBMS_OUTPUT.PUT_LINE(SQLERRM);
 END;
 
 
 DECLARE
+    CURSOR cpf_prop IS
+        SELECT cpf FROM PROPRIETARIO;
     v_tarifa NUMBER;
+    v_cpf cpf_prop%rowtype;
+    v_comando VARCHAR2(300);
 BEGIN
-    -- v_tarifa := CALCULATARIFA('939387738-98');
-    v_tarifa := CALCULATARIFA('928282882-1');
-    DBMS_OUTPUT.PUT_LINE('A tarifa é de R$ ' || TRUNC(v_tarifa, 2));
 
-    EXCEPTION 
-    WHEN no_data_found THEN
-        DBMS_OUTPUT.PUT_LINE('Dados não encontrados.');
+    OPEN cpf_prop;
+    LOOP
+        FETCH cpf_prop INTO v_cpf;
+        EXIT WHEN cpf_prop%NOTFOUND;
+        DBMS_OUTPUT.PUT_LINE(v_cpf.cpf);
+        v_tarifa := CALCULATARIFA('928282882-12');
+        DBMS_OUTPUT.PUT_LINE('A tarifa é de R$ ' || TRUNC(v_tarifa, 2) || ' proprietario => ' || v_cpf.cpf);
+    END LOOP;
+    CLOSE cpf_prop;
+
 END;
